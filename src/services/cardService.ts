@@ -1,7 +1,7 @@
 import TCGdex, { Set, SetResumeModel } from '@tcgdex/sdk'
 import { resizeImageUrl } from '../utils'
 
-type SetDTO = Pick<Set, 'id' | 'name' | 'symbol' | 'cardCount'> & { logo: string, releaseYear: string }
+export type SetDTO = Pick<Set, 'id' | 'name' | 'symbol' | 'cardCount'> & { logo: string, releaseYear: string }
 
 const tcgdex = new TCGdex('fr')
 const tcgdexEN = new TCGdex('en')
@@ -30,30 +30,21 @@ export default class CardService {
     /**
      * Récupère le détail des extensions dont l'id est passé en paramètre
      */
-    static async getSets(ids: string[]): Promise<SetDTO[]> {
-        if (ids.length === 0) return []
+    static async getSet(setId: string): Promise<SetDTO | null> {
+        const set = await tcgdex.set.get(setId)
+        if (!set) return null
 
-        const setResumes = await tcgdex.set.list()
-        const filteredSetResumes = setResumes.filter(s => ids.includes(s.id))
+        let logo = set.logo
+        // Récupérer le logo anglais si le fr n'existe pas
+        if (!logo) logo = (await tcgdexEN.set.get(set.id))?.logo
 
-        const setDetails: SetDTO[] = []
-        for (const setResume of filteredSetResumes) {
-            const set = await setResume.getSet()
-            let logo = set.logo
-
-            // Récupérer le logo anglais si le fr n'existe pas
-            if (!logo) logo = (await tcgdexEN.set.get(set.id))?.logo
-
-            setDetails.push({
-                id: set.id,
-                name: set.name,
-                logo: resizeImageUrl((logo || 'https://assets.tcgdex.net/en/base/base1/logo') + '.webp', 800, 200),
-                symbol: set.symbol,
-                cardCount: set.cardCount,
-                releaseYear: set.releaseDate.substring(0, 4)
-            })
+        return {
+            id: set.id,
+            name: set.name,
+            logo: resizeImageUrl((logo || 'https://assets.tcgdex.net/en/base/base1/logo') + '.webp', 800, 200),
+            symbol: set.symbol,
+            cardCount: set.cardCount,
+            releaseYear: set.releaseDate.substring(0, 4)
         }
-
-        return setDetails
     }
 }

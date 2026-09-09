@@ -1,7 +1,12 @@
-import CardService from './cardService'
+import CardService, { SetDTO } from './cardService'
 import { CronJob } from 'cron'
 import EventEmitter from 'events'
 import ShopRepository from '../repositories/shopRepository'
+
+export type ShopSetDTO = { 
+    set: SetDTO, 
+    price: number 
+}
 
 // Variables globales
 let refreshJob: CronJob | undefined = undefined
@@ -23,7 +28,7 @@ export default class ShopService {
         if (!refreshJob) refreshJob = new CronJob('* * * * *', async () => {
             const randomSets = await CardService.getRandomSetResumes(3)
 
-            this.shopRepository.prisma.$transaction(async (tx) => {
+            await this.shopRepository.prisma.$transaction(async (tx) => {
                 await this.shopRepository.clear(tx)
                 for (const randomSet of randomSets) {
                     // Prix aléatoire entre 100 et 200 par tranches de 25
@@ -52,11 +57,22 @@ export default class ShopService {
     /**
      * Retourne le détail des extensions actuellement présentes dans le shop
      */
-    async getCurrentSets() {
+    async getCurrentSets(): Promise<ShopSetDTO[]> {
         const shopSets = await this.shopRepository.getSets()
         
         if (shopSets.length === 0) return []
 
-        return await CardService.getSets(shopSets.map(s => s.setId))
+        const shopSetsDtos: ShopSetDTO[] = []
+        for (const shopSet of shopSets) {
+            const set = await CardService.getSet(shopSet.setId)
+            if (!set) continue
+
+            shopSetsDtos.push({
+                set,
+                price: shopSet.price
+            })
+        }
+
+        return shopSetsDtos
     }
 }
