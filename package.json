@@ -15,12 +15,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@tcgdex/sdk": "^2.9.0",
     "@types/better-sqlite3": "^9.6.0",
     "better-sqlite3": "^13.0.3",
     "cron": "^4.4.0",
     "discord.js": "^14.27.0",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "prisma": "^7.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -1,11 +1,25 @@
-import { Client } from "discord.js";
-import Database from 'better-sqlite3'
+import { Client, ClientOptions } from "discord.js";
 import config from "../../config";
 import ShopService from "../services/shopService";
+import CustomPrismaClient from "./CustomPrismaClient";
+import UserService from "../services/userService";
+import UserRepository from "../repositories/userRepository";
+import ShopRepository from "../repositories/shopRepository";
 
 export default class CustomClient extends Client {
-    db = new Database(config.dbPath)
-    shopService = new ShopService()
+    userService: UserService
+    shopService: ShopService
+
+    constructor(options: ClientOptions) {
+        super(options)
+
+        const prisma = new CustomPrismaClient()
+        const userRepository = new UserRepository(prisma)
+        const shopRepository = new ShopRepository(prisma)
+
+        this.userService = new UserService(userRepository)
+        this.shopService = new ShopService(shopRepository)
+    }
 
     start() {
         this.login(config.botToken)

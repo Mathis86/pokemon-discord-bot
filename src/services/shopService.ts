@@ -1,20 +1,9 @@
-import Database from 'better-sqlite3'
-import config from '../../config'
 import CardService from './cardService'
 import { CronJob } from 'cron'
-import { Data } from '../../data/tables'
 import EventEmitter from 'events'
-
-// Clés utilisées pour le champ "key" table "datas"
-const enum Keys {
-    ShopSets = 'shopSets'
-}
-
-// Type associé au champ "value" de la table "datas"
-type DataValue = Pick<Data, 'value'>
+import ShopRepository from '../repositories/shopRepository'
 
 // Variables globales
-const db = new Database(config.dbPath)
 let refreshJob: CronJob | undefined = undefined
 
 /**
@@ -22,6 +11,10 @@ let refreshJob: CronJob | undefined = undefined
  */
 export default class ShopService {
     events = new EventEmitter()
+
+    constructor(
+        public shopRepository: ShopRepository
+    ) {}
     
     /**
      * Démarre le job qui refresh le shop toutes les demie heures
@@ -30,20 +23,21 @@ export default class ShopService {
         if (!refreshJob) refreshJob = new CronJob('* * * * *', async () => {
             const randomSets = await CardService.getRandomSetResumes(3)
 
-            const update = db.prepare(`
-                INSERT INTO datas (key, value)
-                VALUES ('${Keys.ShopSets}', ?)
-                ON CONFLICT DO UPDATE SET value = ?    
-            `)
-
-            const setIdsString = randomSets.map(s => s.id).join(',')
-            update.run(setIdsString, setIdsString)
+            this.shopRepository.prisma.$transaction(async (tx) => {
+                await this.shopRepository.clear(tx)
+                for (const randomSet of randomSets) {
+                    // Prix aléatoire entre 100 et 200 par tranches de 25
+                    const randomPrice = 100 + 25 * Math.floor(Math.random() * 5)
+                    await this.shopRepository.addSet(randomSet.id, randomPrice, tx)
+                }
+            })
+            
             this.events.emit('shopRefreshed')
         }, null, true, 'Europe/Paris')
 
         // Exécuter le job immédiatement dans le cas où aucune extension n'est dispo dans le shop
-        const currentSetIds = db.prepare<unknown[], DataValue>(`SELECT value FROM datas WHERE key = '${Keys.ShopSets}'`).get()
-        if (!currentSetIds) refreshJob.fireOnTick()
+        const currentSetIds = await this.shopRepository.getSets()
+        if (currentSetIds.length === 0) refreshJob.fireOnTick()
     }
 
     /**
@@ -59,12 +53,10 @@ export default class ShopService {
      * Retourne le détail des extensions actuellement présentes dans le shop
      */
     async getCurrentSets() {
-        const setsIdsString = db.prepare<unknown[], DataValue>(`SELECT value FROM datas WHERE key = '${Keys.ShopSets}'`).get()
+        const shopSets = await this.shopRepository.getSets()
         
-        if (!setsIdsString) return []
+        if (shopSets.length === 0) return []
 
-        const setsIds = setsIdsString.value.split(',')
-
-        return await CardService.getSets(setsIds)
+        return await CardService.getSets(shopSets.map(s => s.setId))
     }
 }

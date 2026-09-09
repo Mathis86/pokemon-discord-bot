@@ -16,7 +16,7 @@ class Shop extends Command {
     async execute(interaction: ChatInputCommandInteraction, client: CustomClient): Promise<void> {
         const username = interaction.user.displayName
         const userId = interaction.user.id
-        const userBalance = UserService.getBalance(userId)
+        const userBalance = await client.userService.getBalance(userId)
 
         const view = await getContainerAndAttachments(client, username, userBalance)
 
