@@ -1,19 +1,17 @@
-import { AttachmentBuilder, ContainerBuilder, SeparatorSpacingSize, ButtonStyle } from "discord.js"
+import { AttachmentBuilder, ContainerBuilder, SeparatorSpacingSize, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from "discord.js"
 import CustomClient from "../../classes/CustomClient"
 import { ShopSetDTO } from "../../services/shopService"
 import { getAttachment } from "../../utils"
-import { UserCart } from "./shop"
 
 /**
 * Retourne le container et les attachments à renvoyer à l'utilisateur
 */
-export async function getContainerAndAttachments({ client, username, userBalance, buttonsDisabled = false, shopSets, userCart }: {
+export async function getContainerAndAttachments({ client, username, userBalance, buttonsDisabled = false, shopSets }: {
    client: CustomClient,
    username: string,
    userBalance: number,
    buttonsDisabled?: boolean,
-   shopSets: ShopSetDTO[],
-   userCart: UserCart
+   shopSets: ShopSetDTO[]
 }) {
    const attachments: AttachmentBuilder[] = []
 
@@ -43,11 +41,11 @@ export async function getContainerAndAttachments({ client, username, userBalance
          .addSeparatorComponents(sep => sep.setSpacing(SeparatorSpacingSize.Large))
          // Nom de l'extension au dessus de la bannière
          .addTextDisplayComponents(text => text.setContent(`## ${set.name} (${set.releaseYear})`))
-         // Ajout de l'image bannière de l'extension
+         // Image bannière de l'extension
          .addMediaGalleryComponents(media => media
             .addItems(item => item.setURL(set.logo || 'https://assets.tcgdex.net/en/base/base1/logo.webp').setDescription(`Image de ${set.name}`))
          )
-         // Ajout de la ligne contenant le bouton d'achat + des infos propres à la collection de l'utilisateur
+         // Ligne contenant le bouton d'achat + des infos propres à la collection de l'utilisateur
          .addSectionComponents(section => section
             .addTextDisplayComponents(text => text.setContent(`${shopSet.price} pièce(s) • **${cardsCountDummy} / ${set.cardCount.total}** cartes possédée(s)`))
             .setButtonAccessory(btn => btn
@@ -58,20 +56,18 @@ export async function getContainerAndAttachments({ client, username, userBalance
                .setDisabled(buttonsDisabled)
             )
          )
-   }
-
-   // Ajout du panier de l'utilisateur
-   container.addSeparatorComponents(sep => sep.setSpacing(SeparatorSpacingSize.Large))
-   for (const article of userCart) {
-      container.addSectionComponents(section => section
-         .addTextDisplayComponents(text => text.setContent(`${article.setId} x${article.quantity}`))
-         .setButtonAccessory(btn => btn
-            .setCustomId(`remove-${article.setId}`)
-            .setLabel("Retirer 1")
-            .setEmoji({ name: '➖' })
-            .setStyle(ButtonStyle.Danger)
-         )
-      )
+         // Select menu pour choisir la quantité à acheter
+         const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`quantity-${set.id}`)
+         for (let i = 1; i <= 10; i++) {
+            selectMenu.addOptions(new StringSelectMenuOptionBuilder()
+               .setLabel(`Quantité : ${i} • Prix : ${shopSet.price * i}`)
+               .setDescription('Description test')
+               .setValue(i.toString())
+               .setDefault(i === 1)
+            )
+         }
+         container.addActionRowComponents(row => row.addComponents(selectMenu))
    }
 
    return { container, attachments }
