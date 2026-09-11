@@ -1,7 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, StringSelectMenuInteraction, ButtonInteraction } from "discord.js";
 import Command from "../../classes/Command";
 import CustomClient from "../../classes/CustomClient";
 import { getContainerAndAttachments } from "./view";
+import CustomCollector from "../../classes/CustomCollector";
+import { ShopSetDTO } from "../../services/shopService";
 
 /**
  * Ouvre la boutique de boosters 
@@ -16,7 +18,7 @@ class Shop extends Command {
         const userId = interaction.user.id
         const userBalance = await client.userService.getBalance(userId)
         let shopSets = await client.shopService.getCurrentSets()
-        let userQuantities: { setId: string, quantity: number }[] = []
+        let userQuantities: Map<string, number> = new Map()
 
         const view = await getContainerAndAttachments({ client, username, userBalance, shopSets })
 
@@ -27,43 +29,9 @@ class Shop extends Command {
             flags: MessageFlags.IsComponentsV2
         })
 
-        const collector = response.createMessageComponentCollector()
-
-        collector.on('collect', async (i) => {
-            try {
-                if (i.user.id !== interaction.user.id) {
-                    i.reply({ content: "Vous n'êtes pas l'auteur de ce message...", flags: MessageFlags.Ephemeral })
-                    return
-                }
-
-                if (i.customId.startsWith('quantity') && i.isStringSelectMenu()) {
-                    const setId = i.customId.split('-')[1]
-                    const quantity = parseInt(i.values[0])
-                    if (!isNaN(quantity)) {
-                        const userQuantity = userQuantities.find(q => q.setId === setId)
-                        if (userQuantity) userQuantity.quantity = quantity
-                        i.deferUpdate()
-                    }
-                    return
-                }
-
-                const setIdToBuy = i.customId
-                const shopSet = shopSets.find(s => s.set.id === setIdToBuy)
-                if (!shopSet) {
-                    i.deferUpdate()
-                    return
-                }
-
-                const view = await getContainerAndAttachments({ client, username, userBalance, shopSets })
-                await i.update({
-                    components: [view.container],
-                    files: [...view.attachments]
-                })
-
-            } catch (err) {
-                console.error(err)
-            }
-        })
+        new CustomCollector(response)
+            .addRoute('quantity', (i, setId) => updateQuantityToBuy(i as StringSelectMenuInteraction, setId, userQuantities))
+            .addRoute('buy', async (i, setId) => buy({ i: i as ButtonInteraction, setId, client, username, userBalance, shopSets }))
 
         // Actualiser le shop au refresh s'il est toujours ouvert
         client.shopService.events.addListener('shopRefreshed', async () => {
@@ -79,3 +47,39 @@ class Shop extends Command {
 }
 
 export default new Shop()
+
+/**
+ * Change la quantité de boosters à acheter grâce à un select menu
+ */
+function updateQuantityToBuy(i: StringSelectMenuInteraction, setId: string, userQuantities: Map<string, number>) {
+    const quantity = parseInt(i.values[0])
+    if (!isNaN(quantity)) {
+        const quantity = userQuantities.get(setId)
+        if (quantity) userQuantities.set(setId, quantity)
+        i.deferUpdate()
+    }
+}
+
+/**
+ * Achète une certaine quantité de boosters
+ */
+async function buy({ i, setId, client, username, userBalance, shopSets }: {
+    i: ButtonInteraction,
+    setId: string,
+    client: CustomClient,
+    username: string,
+    userBalance: number,
+    shopSets: ShopSetDTO[]
+}) {
+    const shopSet = shopSets.find(s => s.set.id === setId)
+    if (!shopSet) {
+        i.deferUpdate()
+        return
+    }
+
+    const view = await getContainerAndAttachments({ client, username, userBalance, shopSets })
+    await i.update({
+        components: [view.container],
+        files: [...view.attachments]
+    })
+}
